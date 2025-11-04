@@ -1,0 +1,83 @@
+<!doctype html>
+</head>
+<body>
+<main class="centered">
+<section class="card">
+<div class="brand">
+<img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24'><circle cx='12' cy='12' r='10' fill='%23356ef0'/><text x='12' y='16' font-family='Arial' font-size='10' fill='white' text-anchor='middle'>L</text></svg>" alt="logo">
+<h1>Se connecter</h1>
+</div>
+
+
+<form id="loginForm" autocomplete="off" novalidate>
+<label>
+<span>Nom d'utilisateur</span>
+<input name="username" id="username" required autocomplete="username" />
+</label>
+
+
+<label>
+<span>Mot de passe</span>
+<input type="password" name="password" id="password" required autocomplete="current-password" />
+</label>
+
+
+<button type="submit" id="submitBtn">Se connecter</button>
+
+
+<p class="msg" id="msg"></p>
+</form>
+
+
+<footer class="small">© <span id="year"></span> login-jx55</footer>
+</section>
+</main>
+
+
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+
+const form = document.getElementById('loginForm');
+const msg = document.getElementById('msg');
+const submitBtn = document.getElementById('submitBtn');
+
+
+form.addEventListener('submit', async (e) => {
+e.preventDefault();
+msg.textContent = '';
+submitBtn.disabled = true;
+submitBtn.textContent = 'Connexion...';
+
+
+const data = {
+username: document.getElementById('username').value.trim(),
+password: document.getElementById('password').value
+};
+
+
+try {
+const res = await fetch('/login', {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify(data)
+});
+
+
+const json = await res.json();
+if (res.ok && json.success) {
+msg.textContent = 'Connexion réussie — redirection...';
+setTimeout(() => { window.location.href = '/protected'; }, 600);
+} else {
+msg.textContent = json.message || 'Erreur';
+}
+} catch (err) {
+msg.textContent = 'Erreur réseau';
+} finally {
+submitBtn.disabled = false;
+submitBtn.textContent = 'Se connecter';
+}
+});
+</script>
+</body>
+</html>
