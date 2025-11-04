@@ -1,83 +1,81 @@
+// Dépendances principales
 const express = require('express');
+const session = require('express-session');
+const path = require('path');
+const rateLimit = require('express-rate-limit');
+require('dotenv').config();
+
+// Initialisation de l'application
+const app = express();
+
+// Sécurité basique : limite le nombre de requêtes
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,                 // 100 requêtes par IP
+});
 app.use(limiter);
 
+// Middleware pour analyser les formulaires et le JSON
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
+// Gestion des sessions utilisateur
 app.use(session({
-secret: SESSION_SECRET,
-resave: false,
-saveUninitialized: false,
-cookie: {
-httpOnly: true,
-secure: process.env.NODE_ENV === 'production',
-sameSite: 'lax',
-maxAge: 1000 * 60 * 60,
-},
+  secret: process.env.SESSION_SECRET || 'devsecret',
+  resave: false,
+  saveUninitialized: true,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 60 * 60 * 1000 // 1h
+  }
 }));
 
-
+// Dossier public pour les fichiers statiques
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Authentification simple via variables d’environnement
+const USERNAME = process.env.AUTH_USERNAME || 'admin';
+const PASSWORD = process.env.AUTH_PASSWORD || 'password';
 
-app.post('/login', async (req, res) => {
-const { username, password } = req.body || {};
-if (!username || !password) {
-return res.status(400).json({ success: false, message: 'Champs manquants' });
+// Middleware d’authentification
+function requireLogin(req, res, next) {
+  if (req.session.loggedIn) {
+    next();
+  } else {
+    res.redirect('/login.html');
+  }
 }
 
-
-if (username !== AUTH_USERNAME) {
-return res.status(401).json({ success: false, message: 'Nom d\'utilisateur incorrect' });
-}
-
-
-if (!HASHED_PASSWORD) {
-return res.status(500).json({ success: false, message: 'HASHED_PASSWORD non défini côté serveur' });
-}
-
-
-try {
-const match = await bcrypt.compare(password, HASHED_PASSWORD);
-if (!match) return res.status(401).json({ success: false, message: 'Mot de passe incorrect' });
-
-
-req.session.authenticated = true;
-req.session.user = { username };
-return res.json({ success: true, message: 'Connexion réussie' });
-} catch (err) {
-console.error(err);
-return res.status(500).json({ success: false, message: 'Erreur interne' });
-}
+// Route POST pour le login
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  if (username === USERNAME && password === PASSWORD) {
+    req.session.loggedIn = true;
+    res.redirect('/dashboard.html');
+  } else {
+    res.status(401).send('Nom d’utilisateur ou mot de passe invalide.');
+  }
 });
 
-
-app.get('/session', (req, res) => {
-if (req.session && req.session.authenticated) {
-return res.json({ authenticated: true, user: req.session.user });
-}
-return res.json({ authenticated: false });
+// Route GET pour la déconnexion
+app.get('/logout', (req, res) => {
+  req.session.destroy(() => {
+    res.redirect('/login.html');
+  });
 });
 
-
-app.post('/logout', (req, res) => {
-req.session.destroy(err => {
-if (err) return res.status(500).json({ success: false });
-res.clearCookie('connect.sid');
-return res.json({ success: true });
-});
+// Exemple de route protégée
+app.get('/dashboard', requireLogin, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
-
-app.get('/protected', (req, res) => {
-if (req.session && req.session.authenticated) {
-return res.json({ success: true, secret: 'Voici une info protégée' });
-}
-return res.status(401).json({ success: false, message: 'Non autorisé' });
+// Page d’accueil (redirige vers login)
+app.get('/', (req, res) => {
+  res.redirect('/login.html');
 });
 
-
-app.get('*', (req, res) => {
-res.sendFile(path.join(__dirname, 'public', 'index.html'));
+// Démarrage du serveur
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`✅ Serveur démarré sur le port ${PORT}`);
 });
-
-
-app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
