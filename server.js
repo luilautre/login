@@ -1,9 +1,10 @@
 // Dépendances principales
-const express = require('express');
-const session = require('express-session');
-const path = require('path');
-const rateLimit = require('express-rate-limit');
-require('dotenv').config();
+const express = require("express");
+const session = require("express-session");
+const path = require("path");
+const rateLimit = require("express-rate-limit");
+const bcrypt = require("bcrypt");
+require("dotenv").config();
 
 // Initialisation de l'application
 const app = express();
@@ -11,7 +12,7 @@ const app = express();
 // Sécurité basique : limite le nombre de requêtes
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,                 // 100 requêtes par IP
+  max: 100, // 100 requêtes par IP
 });
 app.use(limiter);
 
@@ -20,58 +21,87 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 // Gestion des sessions utilisateur
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'devsecret',
-  resave: false,
-  saveUninitialized: true,
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 60 * 60 * 1000 // 1h
-  }
-}));
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "devsecret",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      maxAge: 60 * 60 * 1000, // 1h
+    },
+  })
+);
 
 // Dossier public pour les fichiers statiques
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, "public")));
 
-// Authentification simple via variables d’environnement
-const USERNAME = process.env.AUTH_USERNAME || 'admin';
-const PASSWORD = process.env.AUTH_PASSWORD || 'password';
+// === Base de données en mémoire (à remplacer plus tard par SQLite/Postgres)
+const users = [];
 
 // Middleware d’authentification
 function requireLogin(req, res, next) {
   if (req.session.loggedIn) {
     next();
   } else {
-    res.redirect('/login.html');
+    res.redirect("/login.html");
   }
 }
 
-// Route POST pour le login
-app.post('/login', (req, res) => {
+// Route POST pour créer un compte
+app.post("/register", async (req, res) => {
   const { username, password } = req.body;
-  if (username === USERNAME && password === PASSWORD) {
-    req.session.loggedIn = true;
-    res.redirect('/dashboard.html');
-  } else {
-    res.status(401).send('Nom d’utilisateur ou mot de passe invalide.');
+
+  if (users.find((u) => u.username === username)) {
+    return res.status(400).send("Nom d'utilisateur déjà pris.");
   }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+  users.push({ username, password: hashedPassword });
+  console.log(`✅ Nouvel utilisateur : ${username}`);
+  res.redirect("/login.html");
+});
+
+// Route POST pour le login
+app.post("/login", async (req, res) => {
+  const { username, password } = req.body;
+  const user = users.find((u) => u.username === username);
+
+  if (!user) {
+    return res.status(401).send("Nom d’utilisateur ou mot de passe invalide.");
+  }
+
+  const valid = await bcrypt.compare(password, user.password);
+  if (!valid) {
+    return res.status(401).send("Nom d’utilisateur ou mot de passe invalide.");
+  }
+
+  req.session.loggedIn = true;
+  req.session.username = username;
+  console.log(`🔓 Connexion : ${username}`);
+  res.redirect("/dashboard");
 });
 
 // Route GET pour la déconnexion
-app.get('/logout', (req, res) => {
+app.get("/logout", (req, res) => {
   req.session.destroy(() => {
-    res.redirect('/login.html');
+    res.clearCookie("connect.sid");
+    res.redirect("/login.html");
   });
 });
 
-// Exemple de route protégée
-app.get('/dashboard', requireLogin, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+// Route protégée : tableau de bord
+app.get("/dashboard", requireLogin, (req, res) => {
+  res.send(`
+    <h1>Bienvenue ${req.session.username} !</h1>
+    <a href="/logout">Se déconnecter</a>
+  `);
 });
 
 // Page d’accueil (redirige vers login)
-app.get('/', (req, res) => {
-  res.redirect('/login.html');
+app.get("/", (req, res) => {
+  res.redirect("/login.html");
 });
 
 // Démarrage du serveur
