@@ -55,7 +55,7 @@ async function createUserTable() {
       msg.textContent = data.message || 'Erreur lors de la création.';
     }
   } catch(err) {
-    msg.textContent = 'Erreur réseau';
+    msg.textContent = 'Erreur : '+err;
   }
 }
 </script>
