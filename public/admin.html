@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin temporaire</title>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #f0f2f5;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+.card {
+  background: white;
+  padding: 2rem;
+  border-radius: 10px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+  text-align: center;
+}
+button {
+  padding: 0.5rem 1rem;
+  margin-top: 1rem;
+  cursor: pointer;
+  border: none;
+  background-color: #356ef0;
+  color: white;
+  border-radius: 5px;
+}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>Admin temporaire</h1>
+  <p>Actions de test :</p>
+
+  <button onclick="createUserTable()">Créer table users</button>
+  <p id="msg"></p>
+</div>
+
+<script>
+async function createUserTable() {
+  const msg = document.getElementById('msg');
+  msg.textContent = 'Création de la table...';
+
+  try {
+    const res = await fetch('/create-users-table', { method: 'POST' });
+    const data = await res.json();
+    if(res.ok) {
+      msg.textContent = 'Table users créée avec succès !';
+    } else {
+      msg.textContent = data.message || 'Erreur lors de la création.';
+    }
+  } catch(err) {
+    msg.textContent = 'Erreur : '+err;
+  }
+}
+</script>
+
+</body>
+</html>
