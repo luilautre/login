@@ -1,91 +1,111 @@
-const express = require('express');
-const cookieParser = require('cookie-parser');
-const { v4: uuidv4 } = require('uuid');
-const path = require('path');
+// Dépendances principales
+const express = require("express");
+const session = require("express-session");
+const path = require("path");
+const rateLimit = require("express-rate-limit");
+const bcrypt = require("bcrypt");
+require("dotenv").config();
 
+// Initialisation de l'application
 const app = express();
-const port = process.env.PORT || 3000;
 
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(cookieParser());
+// Sécurité basique : limite le nombre de requêtes
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // 100 requêtes par IP
+});
+app.use(limiter);
+
+// Middleware pour analyser les formulaires et le JSON
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
-// In-memory storage (replace with DB for production)
-// Structure: { cafeName: { playlist: [ {link, addedAt, id} ], key } }
-const cafes = {};
+// Gestion des sessions utilisateur
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "devsecret",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      maxAge: 60 * 60 * 1000, // 1h
+    },
+  })
+);
 
-function ensureCafe(name) {
-  if (!name) name = 'default';
-  if (!cafes[name]) cafes[name] = { playlist: [], key: uuidv4() };
-  return cafes[name];
+// Dossier public pour les fichiers statiques
+app.use(express.static(path.join(__dirname, "public")));
+
+// === Base de données en mémoire (à remplacer plus tard par SQLite/Postgres)
+const users = [];
+
+// Middleware d’authentification
+function requireLogin(req, res, next) {
+  if (req.session.loggedIn) {
+    next();
+  } else {
+    res.redirect("/login.html");
+  }
 }
 
-// Render the add/select page: public/index.html (static)
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+// Route POST pour créer un compte
+app.post("/register", async (req, res) => {
+  const { username, password } = req.body;
 
-// Endpoint to receive shared links (mobile PWA share target or manual GET)
-app.get('/add', (req, res) => {
-  // support both share_target parameters (url=...) and direct link param
-  const cafe = req.query.café || req.query.cafe || 'default';
-  const link = req.query.link || req.query.url || req.query.text || req.query.title;
-
-  if (!link) {
-    return res.status(400).send('No link provided');
+  if (users.find((u) => u.username === username)) {
+    return res.status(400).send("Nom d'utilisateur déjà pris.");
   }
 
-  const store = ensureCafe(cafe);
-  const item = { id: uuidv4(), link, addedAt: Date.now() };
-  store.playlist.push(item);
+  const hashedPassword = await bcrypt.hash(password, 10);
+  users.push({ username, password: hashedPassword });
+  console.log(`✅ Nouvel utilisateur : ${username}`);
+  res.redirect("/login.html");
+});
 
-  // Simple response: if called from share target, a small page is nicer
-  if (req.headers['user-agent'] && req.headers['user-agent'].includes('Mozilla')) {
-    // redirect to a tiny confirmation page on mobile or show JSON
-    return res.send(`<html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:system-ui;padding:1.5em;text-align:center;"><h2>✅ Musique ajoutée</h2><p>Merci ! Elle a été ajoutée au jukebox «${cafe}».</p><p><a href="/">Retour</a></p></body></html>`);
+// Route POST pour le login
+app.post("/login", async (req, res) => {
+  const { username, password } = req.body;
+  const user = users.find((u) => u.username === username);
+
+  if (!user) {
+    return res.status(401).send("Nom d’utilisateur ou mot de passe invalide.");
   }
 
-  res.json({ ok: true, cafe, item });
+  const valid = await bcrypt.compare(password, user.password);
+  if (!valid) {
+    return res.status(401).send("Nom d’utilisateur ou mot de passe invalide.");
+  }
+
+  req.session.loggedIn = true;
+  req.session.username = username;
+  console.log(`🔓 Connexion : ${username}`);
+  res.redirect("/dashboard");
 });
 
-// Simple API to view playlist (for the bar / debug)
-app.get('/playlist', (req, res) => {
-  const cafe = req.query.café || req.query.cafe || 'default';
-  const store = ensureCafe(cafe);
-  res.json({ cafe, playlist: store.playlist });
+// Route GET pour la déconnexion
+app.get("/logout", (req, res) => {
+  req.session.destroy(() => {
+    res.clearCookie("connect.sid");
+    res.redirect("/login.html");
+  });
 });
 
-// Endpoint to get the play key for a cafe (should be authenticated in real app)
-app.get('/get-play-key', (req, res) => {
-  const cafe = req.query.café || req.query.cafe || 'default';
-  const store = ensureCafe(cafe);
-  res.json({ cafe, key: store.key });
+// Route protégée : tableau de bord
+app.get("/dashboard", requireLogin, (req, res) => {
+  res.send(`
+    <h1>Bienvenue ${req.session.username} !</h1>
+    <a href="/logout">Se déconnecter</a>
+  `);
 });
 
-// Player page (requires key)
-app.get('/play', (req, res) => {
-  const cafe = req.query.café || req.query.cafe || 'default';
-  const key = req.query.key;
-  const store = ensureCafe(cafe);
-  if (!key || key !== store.key) return res.status(403).send('Forbidden');
-  res.sendFile(path.join(__dirname, 'public', 'play.html'));
+// Page d’accueil (redirige vers login)
+app.get("/", (req, res) => {
+  res.redirect("/login.html");
 });
 
-// API to pop first item (called by the player when a track ends)
-app.post('/pop', (req, res) => {
-  const cafe = req.query.café || req.query.cafe || 'default';
-  const key = req.query.key;
-  const store = ensureCafe(cafe);
-  if (!key || key !== store.key) return res.status(403).json({ error: 'forbidden' });
-  const item = store.playlist.shift();
-  res.json({ ok: true, item });
+// Démarrage du serveur
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`✅ Serveur démarré sur le port ${PORT}`);
 });
-
-// API to peek first item
-app.get('/peek', (req, res) => {
-  const cafe = req.query.café || req.query.cafe || 'default';
-  const store = ensureCafe(cafe);
-  res.json({ cafe, next: store.playlist[0] || null });
-});
-
-app.listen(port, () => console.log(`JukeBox server running on http://localhost:${port}`));
