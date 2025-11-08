@@ -1,78 +1,34 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JukeBox Café</title>
-<style>
-  body {
-    font-family: system-ui, sans-serif;
-    background: #fdf8f3;
-    text-align: center;
-    padding: 2em;
-  }
-  h1 { color: #d66b00; }
-  input {
-    width: 90%;
-    max-width: 400px;
-    padding: 0.8em;
-    margin: 1em 0;
-    border: 2px solid #d66b00;
-    border-radius: 10px;
-    font-size: 1em;
-  }
-  button {
-    background: #d66b00;
-    color: #fff;
-    border: none;
-    padding: 0.8em 2em;
-    border-radius: 10px;
-    font-size: 1em;
-    cursor: pointer;
-  }
-  button:hover { background: #ff7f00; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>luilautre | Connexion</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <h1>🎵 JukeBox Café</h1>
-  <p>Recherche ta musique sur YouTube Music :</p>
-
-  <input id="search" type="text" placeholder="ex : Daft Punk – Get Lucky">
-  <br>
-  <button onclick="searchYTMusic()">Rechercher</button>
-  <br>
-  <button onclick="pasteLink()">📋 Coller depuis le presse-papiers</button>
-  <br>
-  <button onclick="addMusic()">🎶 Ajouter cette musique</button>
-
-  <script>
-    function searchYTMusic() {
-      const query = encodeURIComponent(document.getElementById('search').value.trim());
-      if (!query) return;
-      window.open(`https://music.youtube.com/search?q=${query}`, '_blank');
-    }
-
-    async function pasteLink() {
-      const text = await navigator.clipboard.readText();
-      document.getElementById('search').value = text;
-    }
-
-    function addMusic() {
-      const link = document.getElementById('search').value.trim();
-      const params = new URLSearchParams(window.location.search);
-      const cafe = params.get('café') || 'default';
-
-      if (!link.startsWith('http')) {
-        alert("Entre un lien YouTube valide !");
-        return;
-      }
-
-      fetch(`/add?café=${encodeURIComponent(cafe)}&link=${encodeURIComponent(link)}`)
-        .then(res => res.ok
-          ? alert("✅ Ta musique a été ajoutée !")
-          : alert("❌ Erreur d’ajout"))
-        .catch(() => alert("⚠️ Erreur réseau"));
-    }
-  </script>
+  <div class="centered">
+    <div class="card">
+      <div class="brand">
+        <img src="images/logo.png" alt="Logo">
+        <h1>luilautre</h1>
+      </div>
+      <form action="/login" method="POST">
+        <label>
+          <span>Nom d'utilisateur</span>
+          <input type="text" name="username" required>
+        </label>
+        <label>
+          <span>Mot de passe</span>
+          <input type="password" name="password" required>
+        </label>
+        <button type="submit">Se connecter</button>
+        <div class="msg"></div>
+      </form>
+      <div class="small">
+        Pas encore de compte ? <a href="/register.html">Créer un compte</a>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
