@@ -45,7 +45,7 @@ function requireLogin(req, res, next) {
   if (req.session.loggedIn) {
     next();
   } else {
-    res.redirect("/login.html");
+    res.redirect("/");
   }
 }
 
@@ -60,7 +60,7 @@ app.post("/register", async (req, res) => {
   const hashedPassword = await bcrypt.hash(password, 10);
   users.push({ username, password: hashedPassword });
   console.log(`✅ Nouvel utilisateur : ${username}`);
-  res.redirect("/login.html");
+  res.redirect("/");
 });
 
 // Route POST pour le login
@@ -87,7 +87,7 @@ app.post("/login", async (req, res) => {
 app.get("/logout", (req, res) => {
   req.session.destroy(() => {
     res.clearCookie("connect.sid");
-    res.redirect("/login.html");
+    res.redirect("/");
   });
 });
 
@@ -101,7 +101,7 @@ app.get("/dashboard", requireLogin, (req, res) => {
 
 // Page d’accueil (redirige vers login)
 app.get("/", (req, res) => {
-  res.redirect("/login.html");
+  res.redirect("/");
 });
 
 // Démarrage du serveur
